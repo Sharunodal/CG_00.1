@@ -3,7 +3,7 @@ NAME = test
 CPP = c++
 FLAGS = -Wall -Wextra -Werror -std=c++17
 
-SRCS = src/main.cpp src/Game.cpp
+SRCS = src/main.cpp src/Game.cpp src/Player.cpp
 GLAD_SRC = src/thirdparty/glad/src/glad.c
 
 OBJS = $(SRCS:.cpp=.o) $(GLAD_SRC:.c=.o)

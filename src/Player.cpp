@@ -3,7 +3,14 @@
 #include "thirdparty/glad/include/glad/glad.h"
 #include <iostream>
 
-Player::Player() : position(0.0f, 0.0f, 0.0f) {}
+Player::Player() : position(0.0f, 0.5f, 0.0f) {}
+
+void Player::setFloorHeight(float floorHeight) {
+    floorY = floorHeight;
+    // Place player on top of the floor (mesh is now centered, so bottom is at -height/2)
+    position.y = floorY + height * 0.5f;
+    velocity.y = 0.0f;
+}
 
 void Player::loadTexture(const char* path) {
     int w, h, n;
@@ -29,10 +36,10 @@ void Player::loadTexture(const char* path) {
 void Player::initMesh() {
     float vertices[] = {
         // pos         // uv
-        -0.5f, 0.0f, 0.0f,   0.0f, 0.0f,
-         0.5f, 0.0f, 0.0f,   1.0f, 0.0f,
-         0.5f, 1.0f, 0.0f,   1.0f, 1.0f,
-        -0.5f, 1.0f, 0.0f,   0.0f, 1.0f
+        -0.5f, -0.5f, 0.0f,   0.0f, 0.0f,
+         0.5f, -0.5f, 0.0f,   1.0f, 0.0f,
+         0.5f,  0.5f, 0.0f,   1.0f, 1.0f,
+        -0.5f,  0.5f, 0.0f,   0.0f, 1.0f
     };
 
     unsigned int indices[] = { 0, 1, 2, 2, 3, 0 };
@@ -54,4 +61,19 @@ void Player::initMesh() {
 
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5*sizeof(float), (void*)(3*sizeof(float)));
     glEnableVertexAttribArray(1);
+}
+
+void Player::update(float dt) {
+    // Apply gravity
+    velocity.y += gravity * dt;
+
+    // Apply velocity
+    position.y += velocity.y * dt;
+
+    // Collision with ground - player's bottom is at position.y - height * 0.5f
+    float bottomY = position.y - height * 0.5f;
+    if (bottomY < floorY) {
+        position.y = floorY + height * 0.5f;
+        velocity.y = 0.0f;
+    }
 }

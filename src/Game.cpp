@@ -73,13 +73,16 @@ bool Game::init(const std::string& title, int width, int height) {
     }
 
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     loadShaders();
     createFloorMesh();
     loadFloorTexture();
 
-    player.loadTexture("assets/Characters/Chicken.png");
+    player.loadTexture("assets/Characters/1.png");
     player.initMesh();
+    player.setFloorHeight(0.0f);
 
     running = true;
     return true;
@@ -163,13 +166,25 @@ void Game::processEvents() {
 
 void Game::update(float dt) {
     const Uint8* keys = SDL_GetKeyboardState(NULL);
-
     const float speed = 3.0f;
 
-    if (keys[SDL_SCANCODE_W]) player.position.z -= speed * dt;
-    if (keys[SDL_SCANCODE_S]) player.position.z += speed * dt;
-    if (keys[SDL_SCANCODE_A]) player.position.x -= speed * dt;
-    if (keys[SDL_SCANCODE_D]) player.position.x += speed * dt;
+    // Forward and right projected onto ground plane
+    glm::vec3 cameraPos = glm::vec3(5,5,5);
+    glm::vec3 cameraTarget = glm::vec3(0,0,0);
+
+    glm::vec3 forward = glm::normalize(glm::vec3(cameraTarget - cameraPos));
+    forward.y = 0.0f;
+    forward = glm::normalize(forward);
+
+    glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0,1,0)));
+
+    if (keys[SDL_SCANCODE_W]) player.position += forward * speed * dt;
+    if (keys[SDL_SCANCODE_S]) player.position -= forward * speed * dt;
+    if (keys[SDL_SCANCODE_A]) player.position -= right * speed * dt;
+    if (keys[SDL_SCANCODE_D]) player.position += right * speed * dt;
+
+    // player handles gravity
+    player.update(dt);
 }
 
 void Game::render() {
@@ -206,21 +221,27 @@ void Game::render() {
 
     // Render player sprite
     {
+        // compute view/proj
         glm::mat4 model = glm::mat4(1.0f);
-        
+
         // place player into world
         model = glm::translate(model, player.position);
 
-        // texture faces camera
-        glm::mat4 billboard = glm::mat4(glm::mat3(view));
-        model = billboard * model;
+        // create billboard rotation so quad faces camera
+        glm::mat4 billboard = glm::mat4(glm::transpose(glm::mat3(view)));
+        // rotate upside down (appeared wrong before)
+        billboard = glm::rotate(billboard, glm::radians(180.0f), glm::vec3(1,0,0));
+        model = model * billboard;
 
         glm::mat4 mvp = proj * view * model;
         glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(mvp));
 
+        glDepthMask(GL_FALSE);  // Disable depth writing for transparent sprite
         glBindTexture(GL_TEXTURE_2D, player.textureID);
         glBindVertexArray(player.vao);
+
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        glDepthMask(GL_TRUE);   // Re-enable depth writing
     }
 
     SDL_GL_SwapWindow(window);
