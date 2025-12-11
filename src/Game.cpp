@@ -80,9 +80,10 @@ bool Game::init(const std::string& title, int width, int height) {
     createFloorMesh();
     loadFloorTexture();
 
-    player.loadTexture("assets/Characters/1.png");
+    player.loadTexture("assets/Characters/Sheet.png");
     player.initMesh();
-    player.setFloorHeight(0.0f);
+    player.setFloorHeight(0.0f);  // Floor is at Y = 0
+    player.setAnimation(4, 1, 4, 0.1f);  // 4 columns, 1 row, 4 frames, 0.1s per frame
 
     running = true;
     return true;
@@ -178,10 +179,32 @@ void Game::update(float dt) {
 
     glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0,1,0)));
 
-    if (keys[SDL_SCANCODE_W]) player.position += forward * speed * dt;
-    if (keys[SDL_SCANCODE_S]) player.position -= forward * speed * dt;
-    if (keys[SDL_SCANCODE_A]) player.position -= right * speed * dt;
-    if (keys[SDL_SCANCODE_D]) player.position += right * speed * dt;
+    int movementDirection = 0;  // 1 for right, -1 for left, 0 for no movement
+    bool moving = false;
+
+    if (keys[SDL_SCANCODE_W]) {
+        player.position += forward * speed * dt;
+        moving = true;
+        movementDirection = 1;
+    }
+    if (keys[SDL_SCANCODE_S]) {
+        player.position -= forward * speed * dt;
+        moving = true;
+        movementDirection = 1;
+    }
+    if (keys[SDL_SCANCODE_A]) {
+        player.position -= right * speed * dt;
+        moving = true;
+        movementDirection = -1;
+    }
+    if (keys[SDL_SCANCODE_D]) {
+        player.position += right * speed * dt;
+        moving = true;
+        movementDirection = 1;
+    }
+
+    // Update animation
+    player.updateAnimation(dt, moving, movementDirection);
 
     // player handles gravity
     player.update(dt);
@@ -206,6 +229,10 @@ void Game::render() {
                                       100.0f);
 
     GLint loc = glGetUniformLocation(shaderProgram, "uMVP");
+    GLint locCols = glGetUniformLocation(shaderProgram, "uCols");
+    GLint locRows = glGetUniformLocation(shaderProgram, "uRows");
+    GLint locFrame = glGetUniformLocation(shaderProgram, "uFrame");
+    GLint locMirror = glGetUniformLocation(shaderProgram, "uMirror");
 
     // Render floor
     {
@@ -213,6 +240,10 @@ void Game::render() {
         glm::mat4 mvp   = proj * view * model;
 
         glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(mvp));
+        glUniform1i(locCols, 1);
+        glUniform1i(locRows, 1);
+        glUniform1i(locFrame, 0);
+        glUniform1i(locMirror, 1);
 
         glBindTexture(GL_TEXTURE_2D, textureID);    // floor texture
         glBindVertexArray(vao);                     // floor mesh
@@ -235,6 +266,12 @@ void Game::render() {
 
         glm::mat4 mvp = proj * view * model;
         glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(mvp));
+
+        // Set animation uniforms
+        glUniform1i(locCols, player.animCols);
+        glUniform1i(locRows, player.animRows);
+        glUniform1i(locFrame, player.frameIndex);
+        glUniform1i(locMirror, player.facingDirection);
 
         glDepthMask(GL_FALSE);  // Disable depth writing for transparent sprite
         glBindTexture(GL_TEXTURE_2D, player.textureID);

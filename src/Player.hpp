@@ -12,6 +12,16 @@ public:
     float gravity = -9.8f;
     float floorY = 0.0f;
 
+    // Animation
+    int animCols = 4;
+    int animRows = 1;
+    int frameCount = 4;
+    int frameIndex = 0;
+    float frameDuration = 0.1f;
+    float frameTimer = 0.0f;
+    bool animPlaying = false;
+    int facingDirection = 1;  // 1 = right, -1 = left
+
     unsigned int textureID = 0;
     unsigned int vao = 0;
     unsigned int vbo = 0;
@@ -22,6 +32,8 @@ public:
     void loadTexture(const char* path);
     void initMesh();
     void setFloorHeight(float floorHeight);
+    void setAnimation(int cols, int rows, int count, float duration);
+    void updateAnimation(float dt, bool moving, int direction);
     void update(float dt);
 };
 

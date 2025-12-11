@@ -12,6 +12,36 @@ void Player::setFloorHeight(float floorHeight) {
     velocity.y = 0.0f;
 }
 
+void Player::setAnimation(int cols, int rows, int count, float duration) {
+    animCols = cols;
+    animRows = rows;
+    frameCount = count;
+    frameDuration = duration;
+    frameIndex = 0;
+    frameTimer = 0.0f;
+}
+
+void Player::updateAnimation(float dt, bool moving, int direction) {
+    // Update facing direction
+    if (direction != 0) {
+        facingDirection = direction;
+    }
+
+    if (moving) {
+        animPlaying = true;
+        frameTimer += dt;
+        
+        if (frameTimer >= frameDuration) {
+            frameIndex = (frameIndex + 1) % frameCount;
+            frameTimer -= frameDuration;
+        }
+    } else {
+        animPlaying = false;
+        frameIndex = 0;
+        frameTimer = 0.0f;
+    }
+}
+
 void Player::loadTexture(const char* path) {
     int w, h, n;
     unsigned char* data = stbi_load(path, &w, &h, &n, 4);
@@ -27,8 +57,10 @@ void Player::loadTexture(const char* path) {
                  GL_RGBA, GL_UNSIGNED_BYTE, data);
     glGenerateMipmap(GL_TEXTURE_2D);
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
     stbi_image_free(data);
 }
