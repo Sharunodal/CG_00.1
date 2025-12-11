@@ -10,7 +10,9 @@ public:
 
     float height = 1.0f;
     float gravity = -9.8f;
+    float jumpForce = 5.0f;
     float floorY = 0.0f;
+    bool isGrounded = true;
 
     // Animation
     int animCols = 4;
@@ -34,6 +36,7 @@ public:
     void setFloorHeight(float floorHeight);
     void setAnimation(int cols, int rows, int count, float duration);
     void updateAnimation(float dt, bool moving, int direction);
+    void jump();
     void update(float dt);
 };
 

@@ -7,7 +7,7 @@ Player::Player() : position(0.0f, 0.5f, 0.0f) {}
 
 void Player::setFloorHeight(float floorHeight) {
     floorY = floorHeight;
-    // Place player on top of the floor (mesh is now centered, so bottom is at -height/2)
+    // Place player on top of the floor
     position.y = floorY + height * 0.5f;
     velocity.y = 0.0f;
 }
@@ -95,17 +95,26 @@ void Player::initMesh() {
     glEnableVertexAttribArray(1);
 }
 
+void Player::jump() {
+    if (isGrounded) {
+        velocity.y = jumpForce;
+        isGrounded = false;
+    }
+}
+
 void Player::update(float dt) {
     // Apply gravity
     velocity.y += gravity * dt;
-
     // Apply velocity
     position.y += velocity.y * dt;
 
     // Collision with ground - player's bottom is at position.y - height * 0.5f
     float bottomY = position.y - height * 0.5f;
-    if (bottomY < floorY) {
+    if (bottomY <= floorY) {
         position.y = floorY + height * 0.5f;
         velocity.y = 0.0f;
+        isGrounded = true;
+    } else {
+        isGrounded = false;
     }
 }

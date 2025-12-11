@@ -29,6 +29,9 @@ class Game {
 		unsigned int vao = 0;
 		unsigned int textureID = 0;
 
+		// shadow texture (generated at runtime)
+		unsigned int shadowTexture = 0;
+
 		int winWidth = 1200;
 		int winHeight = 1000;
 };

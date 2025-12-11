@@ -83,7 +83,27 @@ bool Game::init(const std::string& title, int width, int height) {
     player.loadTexture("assets/Characters/Sheet.png");
     player.initMesh();
     player.setFloorHeight(0.0f);  // Floor is at Y = 0
-    player.setAnimation(4, 1, 4, 0.1f);  // 4 columns, 1 row, 4 frames, 0.1s per frame
+    player.setAnimation(5, 1, 5, 0.1f);  // 5 columns, 1 row, 5 frames, 0.1s per frame
+
+    // Load shadow PNG
+    {
+        int w, h, n;
+        unsigned char* data = stbi_load("assets/Characters/shadow.png", &w, &h, &n, 4);
+        if (!data) {
+            std::cerr << "Failed to load shadow texture: assets/Characters/shadow.png\n";
+            return false;
+        }
+
+        glGenTextures(1, &shadowTexture);
+        glBindTexture(GL_TEXTURE_2D, shadowTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        stbi_image_free(data);
+    }
 
     running = true;
     return true;
@@ -202,10 +222,13 @@ void Game::update(float dt) {
         moving = true;
         movementDirection = 1;
     }
-
-    // Update animation
+    
+    // Handle jump
+    if (keys[SDL_SCANCODE_SPACE]) {
+        player.jump();
+    }
+    
     player.updateAnimation(dt, moving, movementDirection);
-
     // player handles gravity
     player.update(dt);
 }
@@ -233,6 +256,10 @@ void Game::render() {
     GLint locRows = glGetUniformLocation(shaderProgram, "uRows");
     GLint locFrame = glGetUniformLocation(shaderProgram, "uFrame");
     GLint locMirror = glGetUniformLocation(shaderProgram, "uMirror");
+    GLint locUseColor = glGetUniformLocation(shaderProgram, "uUseColor");
+    GLint locColor = glGetUniformLocation(shaderProgram, "uColor");
+    GLint locShadowInner = glGetUniformLocation(shaderProgram, "uShadowInner");
+    GLint locShadowOuter = glGetUniformLocation(shaderProgram, "uShadowOuter");
 
     // Render floor
     {
@@ -244,6 +271,8 @@ void Game::render() {
         glUniform1i(locRows, 1);
         glUniform1i(locFrame, 0);
         glUniform1i(locMirror, 1);
+        // ensure no tinting from previous draws
+        glUniform4f(locColor, 1.0f, 1.0f, 1.0f, 1.0f);
 
         glBindTexture(GL_TEXTURE_2D, textureID);    // floor texture
         glBindVertexArray(vao);                     // floor mesh
@@ -252,6 +281,55 @@ void Game::render() {
 
     // Render player sprite
     {
+        // Render soft shadow under player (textured if available, otherwise procedural)
+        {
+            glm::mat4 shadowModel = glm::mat4(1.0f);
+            // position at player's x/z, just above the floor to avoid z-fighting
+            glm::vec3 shadowPos = player.position;
+            shadowPos.y = player.floorY + 0.01f;
+            shadowModel = glm::translate(shadowModel, shadowPos);
+            // rotate quad to lie flat on XZ plane
+            shadowModel = glm::rotate(shadowModel, glm::radians(-90.0f), glm::vec3(1,0,0));
+
+            // shrink and soften shadow while airborne
+            float sx = player.isGrounded ? 0.8f : 0.5f;
+            float sz = player.isGrounded ? 0.5f : 0.3f;
+            float shadowAlpha = player.isGrounded ? 1.0f : 0.55f;
+            shadowModel = glm::scale(shadowModel, glm::vec3(sx, 1.0f, sz));
+
+            glm::mat4 shadowMVP = proj * view * shadowModel;
+            glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(shadowMVP));
+
+            if (shadowTexture != 0) {
+                // textured shadow: bind generated soft texture and modulate alpha via uColor
+                glUniform1i(locUseColor, 0);
+                glBindTexture(GL_TEXTURE_2D, shadowTexture);
+                glUniform4f(locColor, 1.0f, 1.0f, 1.0f, shadowAlpha);
+                glUniform1i(locCols, 1);
+                glUniform1i(locRows, 1);
+                glUniform1i(locFrame, 0);
+                glUniform1i(locMirror, 1);
+            } else {
+                // fallback: procedural radial shadow
+                glUniform1i(locUseColor, 2);
+                glUniform4f(locColor, 0.0f, 0.0f, 0.0f, shadowAlpha);
+                glUniform1f(locShadowInner, 0.12f);
+                glUniform1f(locShadowOuter, 0.42f);
+                glUniform1i(locCols, 1);
+                glUniform1i(locRows, 1);
+                glUniform1i(locFrame, 0);
+                glUniform1i(locMirror, 1);
+            }
+
+            // draw using the player quad VAO (rotated to lie flat)
+            glBindVertexArray(player.vao);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+            // restore to texture mode and reset tint to white so subsequent draws are unaffected
+            glUniform1i(locUseColor, 0);
+            glUniform4f(locColor, 1.0f, 1.0f, 1.0f, 1.0f);
+        }
+
         // compute view/proj
         glm::mat4 model = glm::mat4(1.0f);
 
