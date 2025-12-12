@@ -4,6 +4,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <cstdlib>
+#include <cstring>
 #define STB_IMAGE_IMPLEMENTATION
 #include "thirdparty/stb_image.h"
 #include <fstream>
@@ -43,20 +45,64 @@ bool Game::init(const std::string& title, int width, int height) {
     winWidth = width;
     winHeight = height;
 
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-        std::cerr << "SDL_Init error: " << SDL_GetError() << std::endl;
+    // Try initializing events subsystem
+    bool evInit = SDL_Init(SDL_INIT_EVENTS);
+    if (!evInit) {
+        std::cerr << "SDL_Init(SDL_INIT_EVENTS) failed, SDL_GetError(): '" << SDL_GetError() << "'\n";
         return false;
+    }
+
+    bool initResult = SDL_InitSubSystem(SDL_INIT_VIDEO);
+    if (!initResult) {
+        std::cerr << "SDL_InitSubSystem(SDL_INIT_VIDEO) failed, SDL_GetError(): '" << SDL_GetError() << "'\n";
+
+        // Try forcing a dummy video driver
+        const char* cur = getenv("SDL_VIDEODRIVER");
+        if (!cur || strlen(cur) == 0) {
+#if defined(_WIN32) || defined(__MINGW32__)
+            _putenv_s("SDL_VIDEODRIVER", "dummy");
+#else
+            setenv("SDL_VIDEODRIVER", "dummy", 1);
+#endif
+            bool retry = SDL_InitSubSystem(SDL_INIT_VIDEO);
+            if (!retry) {
+                std::cerr << "Retry SDL_InitSubSystem(SDL_INIT_VIDEO) failed, SDL_GetError(): '" << SDL_GetError() << "'\n";
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+
+    // Probe audio subsystem
+    bool audioInit = SDL_InitSubSystem(SDL_INIT_AUDIO);
+    if (!audioInit) {
+        std::cerr << "Warning: SDL_InitSubSystem(SDL_INIT_AUDIO) failed, SDL_GetError(): '" << SDL_GetError() << "'\n";
+
+        // Try a dummy audio backend if available
+        const char* curAud = getenv("SDL_AUDIODRIVER");
+        if (!curAud || strlen(curAud) == 0) {
+#if defined(_WIN32) || defined(__MINGW32__)
+            _putenv_s("SDL_AUDIODRIVER", "dummy");
+#else
+            setenv("SDL_AUDIODRIVER", "dummy", 1);
+#endif
+            bool retryAud = SDL_InitSubSystem(SDL_INIT_AUDIO);
+            if (!retryAud) {
+                std::cerr << "Retry SDL_InitSubSystem(SDL_INIT_AUDIO) failed, SDL_GetError(): '" << SDL_GetError() << "'\n";
+            }
+        }
     }
 
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
+    // SDL3 CreateWindow
     window = SDL_CreateWindow(
         title.c_str(),
-        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         width, height,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN
+        SDL_WINDOW_OPENGL
     );
 
     if (!window) {
@@ -65,6 +111,11 @@ bool Game::init(const std::string& title, int width, int height) {
     }
 
     glContext = SDL_GL_CreateContext(window);
+    if (!glContext) {
+        std::cerr << "Failed to create GL context: " << SDL_GetError() << std::endl;
+        return false;
+    }
+
     SDL_GL_MakeCurrent(window, glContext);
 
     if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)) {
@@ -83,8 +134,7 @@ bool Game::init(const std::string& title, int width, int height) {
     player.loadTexture("assets/Characters/Sheet2.png");
     player.initMesh();
     player.setFloorHeight(0.0f);  // Floor is at Y = 0
-    // Sheet2 layout: 4 columns x 7 rows, 4 frames per row
-    player.setAnimation(4, 7, 4, 0.1f);
+    player.setAnimation(4, 7, 4, 0.1f); // 4 columns x 7 rows, 4 frames per row
 
     // Load shadow PNG
     {
@@ -180,14 +230,16 @@ void Game::run() {
 }
 
 void Game::processEvents() {
-	SDL_Event e;
-	while (SDL_PollEvent(&e)) {
-		if (e.type == SDL_QUIT) running = false;
-	}
+    SDL_Event e;
+    while (SDL_PollEvent(&e)) {
+        if (e.type == SDL_EVENT_QUIT) {
+            running = false;
+        }
+    }
 }
 
 void Game::update(float dt) {
-    const Uint8* keys = SDL_GetKeyboardState(NULL);
+    const bool* keys = SDL_GetKeyboardState(NULL);
     const float speed = 3.0f;
 
     // Forward and right projected onto ground plane
@@ -234,12 +286,12 @@ void Game::update(float dt) {
         player.jump();
     }
     
-    // track last non-zero move dir for idle facing selection
+    // track last non-zero move direction for idle facing selection
     if (glm::length(dir2) > 0.001f) {
         lastMoveDir = glm::normalize(dir2);
     }
 
-    // compute facing index (0..4) from lastMoveDir
+    // compute facing index from lastMoveDir
     glm::vec2 lv = glm::normalize(lastMoveDir);
     float angleDeg = glm::degrees(atan2(lv.x, lv.y));
     float aa = fabs(angleDeg);
@@ -321,7 +373,7 @@ void Game::render() {
 
     // Render player sprite
     {
-        // Render soft shadow under player (textured if available, otherwise procedural)
+        // Render soft shadow under player
         {
             glm::mat4 shadowModel = glm::mat4(1.0f);
             // position at player's x/z, just above the floor to avoid z-fighting
@@ -409,7 +461,7 @@ void Game::clean() {
     glDeleteVertexArrays(1, &vao);
     glDeleteProgram(shaderProgram);
 
-    SDL_GL_DeleteContext(glContext);
+    SDL_GL_DestroyContext(glContext);
     SDL_DestroyWindow(window);
     SDL_Quit();
 }
