@@ -34,6 +34,9 @@ class Game {
 
 		int winWidth = 1200;
 		int winHeight = 1000;
+
+		// last move direction used to determine facing row when idle
+		glm::vec2 lastMoveDir {0.0f, 1.0f};
 };
 
 #endif

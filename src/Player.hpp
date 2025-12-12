@@ -23,6 +23,8 @@ public:
     float frameTimer = 0.0f;
     bool animPlaying = false;
     int facingDirection = 1;  // 1 = right, -1 = left
+    int facingIndex = 0; // discrete facing (0..4)
+    int activeRow = 0; // current animation row (0-based)
 
     unsigned int textureID = 0;
     unsigned int vao = 0;

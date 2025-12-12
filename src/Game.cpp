@@ -80,10 +80,11 @@ bool Game::init(const std::string& title, int width, int height) {
     createFloorMesh();
     loadFloorTexture();
 
-    player.loadTexture("assets/Characters/Sheet.png");
+    player.loadTexture("assets/Characters/Sheet2.png");
     player.initMesh();
     player.setFloorHeight(0.0f);  // Floor is at Y = 0
-    player.setAnimation(5, 1, 5, 0.1f);  // 5 columns, 1 row, 5 frames, 0.1s per frame
+    // Sheet2 layout: 4 columns x 7 rows, 4 frames per row
+    player.setAnimation(4, 7, 4, 0.1f);
 
     // Load shadow PNG
     {
@@ -202,25 +203,30 @@ void Game::update(float dt) {
     int movementDirection = 0;  // 1 for right, -1 for left, 0 for no movement
     bool moving = false;
 
+    glm::vec2 dir2(0.0f, 0.0f);
     if (keys[SDL_SCANCODE_W]) {
         player.position += forward * speed * dt;
         moving = true;
         movementDirection = 1;
+        dir2.y += 1.0f;
     }
     if (keys[SDL_SCANCODE_S]) {
         player.position -= forward * speed * dt;
         moving = true;
         movementDirection = 1;
+        dir2.y -= 1.0f;
     }
     if (keys[SDL_SCANCODE_A]) {
         player.position -= right * speed * dt;
         moving = true;
         movementDirection = -1;
+        dir2.x -= 1.0f;
     }
     if (keys[SDL_SCANCODE_D]) {
         player.position += right * speed * dt;
         moving = true;
         movementDirection = 1;
+        dir2.x += 1.0f;
     }
     
     // Handle jump
@@ -228,6 +234,40 @@ void Game::update(float dt) {
         player.jump();
     }
     
+    // track last non-zero move dir for idle facing selection
+    if (glm::length(dir2) > 0.001f) {
+        lastMoveDir = glm::normalize(dir2);
+    }
+
+    // compute facing index (0..4) from lastMoveDir
+    glm::vec2 lv = glm::normalize(lastMoveDir);
+    float angleDeg = glm::degrees(atan2(lv.x, lv.y));
+    float aa = fabs(angleDeg);
+    int facingIdx = 0;
+    if (aa < 22.5f) facingIdx = 0;
+    else if (aa < 67.5f) facingIdx = 1;
+    else if (aa < 112.5f) facingIdx = 2;
+    else if (aa < 157.5f) facingIdx = 3;
+    else facingIdx = 4;
+    player.facingIndex = facingIdx;
+
+    // set activeRow depending on movement vs idle
+    if (moving) {
+        int walkingRow = 6;
+        if (facingIdx == 3 || facingIdx == 4) walkingRow = 5;
+        else if (facingIdx == 2) walkingRow = (lv.y >= 0.0f) ? 6 : 5;
+        if (player.activeRow != walkingRow) {
+            player.activeRow = walkingRow;
+            player.frameIndex = 0;
+        }
+    } else {
+        int idleRow = glm::clamp(player.facingIndex, 0, 4);
+        if (player.activeRow != idleRow) {
+            player.activeRow = idleRow;
+            player.frameIndex = 0;
+        }
+    }
+
     player.updateAnimation(dt, moving, movementDirection);
     // player handles gravity
     player.update(dt);
@@ -348,7 +388,9 @@ void Game::render() {
         // Set animation uniforms
         glUniform1i(locCols, player.animCols);
         glUniform1i(locRows, player.animRows);
-        glUniform1i(locFrame, player.frameIndex);
+        // compose global frame number = row*cols + frameIndex
+        int frameNumber = player.activeRow * player.animCols + player.frameIndex;
+        glUniform1i(locFrame, frameNumber);
         glUniform1i(locMirror, player.facingDirection);
 
         glDepthMask(GL_FALSE);  // Disable depth writing for transparent sprite
