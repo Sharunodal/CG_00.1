@@ -56,14 +56,14 @@ bool Game::init(const std::string& title, int width, int height) {
     if (!initResult) {
         std::cerr << "SDL_InitSubSystem(SDL_INIT_VIDEO) failed, SDL_GetError(): '" << SDL_GetError() << "'\n";
 
-        // Try forcing a dummy video driver
+        // Try forcing a dummy video driver if failed
         const char* cur = getenv("SDL_VIDEODRIVER");
         if (!cur || strlen(cur) == 0) {
-#if defined(_WIN32) || defined(__MINGW32__)
+            #if defined(_WIN32) || defined(__MINGW32__)
             _putenv_s("SDL_VIDEODRIVER", "dummy");
-#else
+            #else
             setenv("SDL_VIDEODRIVER", "dummy", 1);
-#endif
+            #endif
             bool retry = SDL_InitSubSystem(SDL_INIT_VIDEO);
             if (!retry) {
                 std::cerr << "Retry SDL_InitSubSystem(SDL_INIT_VIDEO) failed, SDL_GetError(): '" << SDL_GetError() << "'\n";
@@ -82,11 +82,11 @@ bool Game::init(const std::string& title, int width, int height) {
         // Try a dummy audio backend if available
         const char* curAud = getenv("SDL_AUDIODRIVER");
         if (!curAud || strlen(curAud) == 0) {
-#if defined(_WIN32) || defined(__MINGW32__)
+            #if defined(_WIN32) || defined(__MINGW32__)
             _putenv_s("SDL_AUDIODRIVER", "dummy");
-#else
+            #else
             setenv("SDL_AUDIODRIVER", "dummy", 1);
-#endif
+            #endif
             bool retryAud = SDL_InitSubSystem(SDL_INIT_AUDIO);
             if (!retryAud) {
                 std::cerr << "Retry SDL_InitSubSystem(SDL_INIT_AUDIO) failed, SDL_GetError(): '" << SDL_GetError() << "'\n";
@@ -306,8 +306,7 @@ void Game::update(float dt) {
     // set activeRow depending on movement vs idle
     if (moving) {
         int walkingRow = 6;
-        if (facingIdx == 3 || facingIdx == 4) walkingRow = 5;
-        else if (facingIdx == 2) walkingRow = (lv.y >= 0.0f) ? 6 : 5;
+        if (facingIdx == 2 || facingIdx == 3 || facingIdx == 4) walkingRow = 5;
         if (player.activeRow != walkingRow) {
             player.activeRow = walkingRow;
             player.frameIndex = 0;
@@ -321,7 +320,7 @@ void Game::update(float dt) {
     }
 
     player.updateAnimation(dt, moving, movementDirection);
-    // player handles gravity
+    // player class handles gravity
     player.update(dt);
 }
 
